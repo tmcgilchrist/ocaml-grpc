@@ -57,6 +57,7 @@
   stringext))
 
 (package
+
  (name grpc-examples)
  (synopsis "Various grpc examples")
  (description "Various grpc examples.")
@@ -80,5 +81,13 @@
    bechamel
    bechamel-notty
   (grpc-lwt (= :version))
-   ocaml-protoc 
+   ocaml-protoc
    h2-lwt-unix))
+
+(package
+ (name grpc-eio)
+ (synopsis "An Eio implementation of gRPC")
+ (description
+  "Functionality for building gRPC services and rpcs with `eio`.")
+ (depends grpc eio h2-eio stringext))
+
