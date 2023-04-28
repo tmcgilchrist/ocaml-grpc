@@ -69,6 +69,7 @@
   conduit-lwt-unix
   cohttp-lwt-unix
   tls-async
+  eio-main
   stringext))
 
 (package
