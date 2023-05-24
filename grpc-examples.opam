@@ -19,7 +19,7 @@ depends: [
   "conduit-lwt-unix"
   "cohttp-lwt-unix"
   "tls-async"
-  "eio-main"
+  "eio_main"
   "stringext"
   "odoc" {with-doc}
 ]
