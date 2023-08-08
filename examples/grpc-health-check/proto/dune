@@ -1,0 +1,18 @@
+(library
+ (name health_check_proto)
+ (package grpc-examples)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq))
+ (libraries ocaml-protoc-plugin))
+
+(rule
+ (targets health.ml)
+ (deps
+  (:proto health.proto))
+ (action
+  (run
+    protoc
+    -I
+    .
+    "--ocaml_out=annot=[@@deriving show { with_path = false }, eq]:."
+    %{proto})))

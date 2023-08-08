@@ -1,0 +1,14 @@
+(executables
+ (names health_check)
+ (package grpc-examples)
+ (public_names health-check-server)
+ (libraries
+   grpc-eio
+   eio_main
+   h2-eio
+   health_check_proto
+   ocaml-protoc-plugin
+   yojson
+   ppx_deriving_yojson.runtime)
+ (preprocess
+  (pps ppx_deriving_yojson ppx_deriving.eq)))
