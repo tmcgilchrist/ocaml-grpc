@@ -44,6 +44,8 @@ jobs:
         with:
           ocaml-compiler: ocaml.5.0.0,ocaml-option-mingw
           opam-repositories: |
+            opam-repository-mingw: https://github.com/ocaml-opam/opam-repository-mingw.git#sunset
+            opam-repository-default: https://github.com/ocaml/opam-repository.git
             dra27: https://github.com/dra27/opam-repository.git#windows-5.0
             default: https://github.com/fdopen/opam-repository-mingw.git#opam2
 
