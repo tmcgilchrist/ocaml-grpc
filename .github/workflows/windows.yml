@@ -1,0 +1,42 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  # build1:
+  #   runs-on: windows-latest
+
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
+
+  #     - name: Set-up OCaml
+  #       uses: ocaml/setup-ocaml@v2
+  #       with:
+  #         ocaml-compiler: 4.14.x
+
+  #     - run: opam repo add dra27 git+https://github.com/dra27/opam-repository#windows-5.0 --all --set-default
+  #     - run: opam switch create 5.0 --packages=ocaml.5.0.0,ocaml-option-mingw
+  #     - run: opam exec --switch=5.0 -- ocamlopt -config
+  #     - run: opam install --switch=5.0 utop
+
+  build2:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ocaml.5.0.0,ocaml-option-mingw
+          opam-repositories: |
+            opam-repository-mingw: https://github.com/ocaml-opam/opam-repository-mingw.git#sunset
+            default: https://github.com/ocaml/opam-repository.git
+
+      - name: Install opam package dependencies
+        run: opam install .
+
+      - name: Run build @all
+        run: opam exec -- dune build @all
