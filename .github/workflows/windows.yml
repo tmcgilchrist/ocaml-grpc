@@ -48,7 +48,7 @@ jobs:
             default: https://github.com/fdopen/opam-repository-mingw.git#opam2
 
       - name: Install opam package dependencies
-        run: opam install .
+        run: opam install ./grpc.opam ./grpc-lwt.opam ./grpc-eio.opam -y
 
       - name: Run build @all
         run: opam exec -- dune build @all
