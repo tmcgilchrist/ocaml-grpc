@@ -1,0 +1,12 @@
+(rule
+ (targets test.ml)
+ (deps
+  (:proto test.proto empty.proto messages.proto))
+ (action
+  (run
+    protoc
+    -I
+    .
+    "--ocaml_out=annot=[@@deriving show { with_path = false }, eq]:."
+    %{proto})))
+
