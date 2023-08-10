@@ -18,7 +18,7 @@ homepage: "https://github.com/dialohq/ocaml-grpc"
 doc: "https://dialohq.github.io/ocaml-grpc"
 bug-reports: "https://github.com/dialohq/ocaml-grpc/issues"
 depends: [
-  "dune" {>= "3.7"}
+  "dune" {>= "3.2"}
   "grpc"
   "bechamel" {>= "0.4.0"}
   "notty"

@@ -1,6 +1,10 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      -main
 
 jobs:
   # build1:
@@ -21,7 +25,7 @@ jobs:
   #     - run: opam install --switch=5.0 utop
 
   build2:
-    runs-on: windows-latest
+    runs-on: windows-latest # windows-2022
 
     steps:
       - name: Checkout code
