@@ -20,7 +20,7 @@ TEST_CASES=(
 )
 
 # join all test cases in one comma separated string (dropping the first one)
-# so we can call the rust client only once, reducing the noise
+# so we can call the OCaml client only once, reducing the noise
 JOINED_TEST_CASES=$(printf ",%s" "${TEST_CASES[@]}")
 JOINED_TEST_CASES="${JOINED_TEST_CASES:1}"
 
@@ -38,13 +38,13 @@ esac
 ARG="${1:-""}"
 
 
-(cd interop && cargo build --bins)
+dune build @all
 
-SERVER="interop/bin/server_${OS}_amd64${EXT}"
+SERVER="./bin/server_${OS}_amd64${EXT}"
 
-TLS_CA="interop/data/ca.pem"
-TLS_CRT="interop/data/server1.pem"
-TLS_KEY="interop/data/server1.key"
+TLS_CA="./data/ca.pem"
+TLS_CRT="./data/server1.pem"
+TLS_KEY="./data/server1.key"
 
 # run the test server
 ./"${SERVER}" ${ARG} --tls_cert_file $TLS_CRT --tls_key_file $TLS_KEY &
@@ -57,14 +57,15 @@ trap 'echo ":; killing test server"; kill ${SERVER_PID};' EXIT
 
 sleep 1
 
-./target/debug/client --test_case="${JOINED_TEST_CASES}" ${ARG}
+# ./target/debug/client --test_case="${JOINED_TEST_CASES}" ${ARG}
+dune exec -- interop-client --test_case="${JOINED_TEST_CASES}" ${ARG}
 
 echo ":; killing test server"; kill ${SERVER_PID};
 
 # run the test server
-./target/debug/server ${ARG} &
+dune exec -- interop-server ${ARG} &
 SERVER_PID=$!
-echo ":; started tonic test server."
+echo ":; started grpc test server."
 
 # trap exits to make sure we kill the server process when the script exits,
 # regardless of why (errors, SIGTERM, etc).
@@ -72,7 +73,7 @@ trap 'echo ":; killing test server"; kill ${SERVER_PID};' EXIT
 
 sleep 1
 
-./target/debug/client --test_case="${JOINED_TEST_CASES}" ${ARG}
+dune exec -- interop-client --test_case="${JOINED_TEST_CASES}" ${ARG}
 
 TLS_ARGS=""
 
@@ -81,5 +82,5 @@ if [ -n "${ARG}" ]; then
 fi
 
 for CASE in "${TEST_CASES[@]}"; do
-  interop/bin/client_${OS}_amd64${EXT} --test_case="${CASE}" ${TLS_ARGS}
+  ./bin/client_${OS}_amd64${EXT} --test_case="${CASE}" ${TLS_ARGS}
 done

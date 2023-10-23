@@ -6,7 +6,7 @@
 
 (name grpc)
 
-(license "BSD-3-Clause")
+(license BSD-3-Clause)
 
 (authors
  "Andrew Jeffery <dev@jeffas.io>"
@@ -22,15 +22,18 @@
 (source
  (github dialohq/ocaml-grpc))
 
-(documentation "https://dialohq.github.io/ocaml-grpc")
+(documentation https://dialohq.github.io/ocaml-grpc)
 
 (package
  (name grpc)
  (synopsis "A modular gRPC library")
  (description
   "This library builds some of the signatures and implementations of gRPC functionality. This is used in the more specialised package `grpc-lwt` which has more machinery, however this library can also be used to do some bits yourself.")
- (tags (network rpc serialisation))
+ (tags
+  (network rpc serialisation))
  (depends
+  (bigstringaf
+   (>= 0.9.1))
   (ocaml
    (>= 4.08))
   (uri
@@ -44,8 +47,11 @@
  (synopsis "An Lwt implementation of gRPC")
  (description
   "Functionality for building gRPC services and rpcs with `lwt`.")
- (tags (network rpc serialisation))
+ (tags
+  (network rpc serialisation))
  (depends
+  (h2
+   (>= 0.10.0))
   (grpc
    (= :version))
   (lwt
@@ -57,7 +63,8 @@
  (synopsis "An Async implementation of gRPC")
  (description
   "Functionality for building gRPC services and rpcs with `async`.")
- (tags (network rpc serialisation))
+ (tags
+  (network rpc serialisation))
  (depends
   (ocaml
    (>= 4.11))
@@ -68,48 +75,85 @@
   (h2-async
    (>= 0.9.0))
   (async
-   (and (>= v0.15) (< v0.16)))
+   (and
+    (>= v0.15)
+    (< v0.16)))
   (ppx_jane
-   (and (>= v0.15) (< v0.16)))
+   (and
+    (>= v0.15)
+    (< v0.16)))
   stringext))
 
 (package
-
  (name grpc-examples)
  (synopsis "Various grpc examples")
  (description "Various grpc examples.")
- (tags (network rpc serialisation))
+ (tags
+  (network rpc serialisation))
  (depends
+  (uri
+   (>= 4.2.0))
+  (ppx_deriving
+   (>= 5.2.1))
+  (lwt
+   (>= 5.6.1))
+  (h2-async
+   (>= 0.10.0))
+  (h2
+   (>= 0.10.0))
+  (core_unix
+   (>= v0.15.2))
+  (core
+   (>= v0.15.1))
+  (cohttp-lwt
+   (>= 5.3.0))
+  (cohttp
+   (>= 5.3.0))
   grpc-lwt
   grpc-async
   grpc-eio
-  (ocaml-protoc-plugin (>= 4.5))
+  (ocaml-protoc-plugin
+   (>= 4.5))
   (async
-   (and (>= v0.15) (< v0.16)))
+   (and
+    (>= v0.15)
+    (< v0.16)))
   (ppx_jane
-   (and (>= v0.15) (< v0.16)))
+   (and
+    (>= v0.15)
+    (< v0.16)))
   ppx_deriving_yojson
   h2-lwt-unix
   conduit-lwt-unix
   cohttp-lwt-unix
   tls-async
-  (lwt_ssl (>= 1.2.0))
-  (mdx (and (>= 2.2.1) :with-test))
-  (eio_main (>= 0.10))
+  (lwt_ssl
+   (>= 1.2.0))
+  (mdx
+   (and
+    (>= 2.2.1)
+    :with-test))
+  (eio_main
+   (>= 0.10))
   stringext))
 
 (package
  (name grpc-bench)
  (synopsis "grpc benchmarking")
  (description "grpc benchmarking.")
- (tags (network rpc serialisation benchmark))
+ (tags
+  (network rpc serialisation benchmark))
  (depends
   grpc
-  (bechamel(>= 0.4.0))
+  (bechamel
+   (>= 0.4.0))
   notty
-  (bechamel-notty (>= 0.4.0))
-  (bigstringaf (>= 0.9.1))
-  (notty (>= 0.2.3))))
+  (bechamel-notty
+   (>= 0.4.0))
+  (bigstringaf
+   (>= 0.9.1))
+  (notty
+   (>= 0.2.3))))
 
 (package
  (name grpc-eio)

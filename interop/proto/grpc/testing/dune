@@ -1,12 +1,17 @@
+(library
+ (name interop_proto)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq))
+ (libraries ocaml-protoc-plugin))
+
 (rule
- (targets test.ml)
+ (targets test.ml empty.ml messages.ml)
  (deps
   (:proto test.proto empty.proto messages.proto))
  (action
   (run
-    protoc
-    -I
-    .
-    "--ocaml_out=annot=[@@deriving show { with_path = false }, eq]:."
-    %{proto})))
-
+   protoc
+   -I
+   .
+   "--ocaml_out=annot=[@@deriving show { with_path = false }, eq]:."
+   %{proto})))

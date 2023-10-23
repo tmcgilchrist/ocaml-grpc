@@ -3,10 +3,38 @@
  (package grpc-examples)
  (public_names interop-server interop-client)
  (libraries
+  grpc-eio
+  grpc-lwt
+  eio_main
+  h2-eio
+  h2-lwt-unix
+  lwt
+  lwt.unix
+  ocaml-protoc-plugin
+  interop_proto
+  yojson
+  cmdliner
+  ppx_deriving_yojson.runtime)
+ (modules server client)
+ (preprocess
+  (pps ppx_deriving_yojson ppx_deriving.eq)))
+
+
+(executable
+ (name lwt_client)
+ (package grpc-examples)
+ (public_name interop-client-lwt)
+ (modules lwt_client)
+ (libraries
    grpc-eio
+   grpc-lwt
    eio_main
    h2-eio
+   h2-lwt-unix
+   lwt
+   lwt.unix
    ocaml-protoc-plugin
+   interop_proto
    yojson
    cmdliner
    ppx_deriving_yojson.runtime)

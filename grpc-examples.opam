@@ -19,6 +19,15 @@ doc: "https://dialohq.github.io/ocaml-grpc"
 bug-reports: "https://github.com/dialohq/ocaml-grpc/issues"
 depends: [
   "dune" {>= "3.7"}
+  "uri" {>= "4.2.0"}
+  "ppx_deriving" {>= "5.2.1"}
+  "lwt" {>= "5.6.1"}
+  "h2-async" {>= "0.10.0"}
+  "h2" {>= "0.10.0"}
+  "core_unix" {>= "v0.15.2"}
+  "core" {>= "v0.15.1"}
+  "cohttp-lwt" {>= "5.3.0"}
+  "cohttp" {>= "5.3.0"}
   "grpc-lwt"
   "grpc-async"
   "grpc-eio"
