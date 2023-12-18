@@ -6,7 +6,8 @@
   grpc-eio
   eio_main
   h2-eio
-  ocaml-protoc-plugin
+  ocaml-protoc
+  pbrt
   routeguide
   yojson
   ppx_deriving_yojson.runtime)

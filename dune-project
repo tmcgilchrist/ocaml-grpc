@@ -90,6 +90,7 @@
   grpc-eio
   h2-eio
   (ocaml-protoc-plugin (>= 4.5))
+  ocaml-protoc
   ppx_deriving_yojson
   conduit-lwt-unix
   cohttp-lwt-unix

@@ -1,44 +1,47 @@
 open Grpc_eio
-open Routeguide.Route_guide.Routeguide
-open Ocaml_protoc_plugin
+open Routeguide
 
 (* Derived data types to make reading JSON data easier. *)
 type location = { latitude : int; longitude : int } [@@deriving yojson]
 type feature = { location : location; name : string } [@@deriving yojson]
 type feature_list = feature list [@@deriving yojson]
 
-let features : Feature.t list ref = ref []
+let features : Route_guide.feature list ref = ref []
+
+let compare_point (p1 : Route_guide.point) (p2 : Route_guide.point) =
+  p1.latitude == p2.latitude &&
+    p1.longitude == p2.longitude
 
 module RouteNotesMap = Hashtbl.Make (struct
-  type t = Point.t
+  type t = Route_guide.point
 
-  let equal = Point.equal
+  let equal = compare_point
   let hash s = Hashtbl.hash s
 end)
 
 (** Load route_guide data from a JSON file. *)
-let load path : Feature.t list =
+let load path : Route_guide.feature list =
   let json = Yojson.Safe.from_file path in
   match feature_list_of_yojson json with
   | Ok v ->
       List.map
         (fun feature ->
-          Feature.make ~name:feature.name
+          Route_guide.default_feature ~name:feature.name
             ~location:
-              (Point.make ~longitude:feature.location.longitude
-                 ~latitude:feature.location.latitude ())
+            (Some (Route_guide.default_point ~longitude:(Int32.of_int feature.location.longitude)
+                 ~latitude:(Int32.of_int feature.location.latitude) ()))
             ())
         v
   | Error err -> failwith err
 
-let in_range (point : Point.t) (rect : Rectangle.t) : bool =
+let in_range (point : Route_guide.point) (rect : Route_guide.rectangle) : bool =
   let lo = Option.get rect.lo in
   let hi = Option.get rect.hi in
 
-  let left = Int.min lo.longitude hi.longitude in
-  let right = Int.max lo.longitude hi.longitude in
-  let top = Int.max lo.latitude hi.latitude in
-  let bottom = Int.min lo.latitude hi.latitude in
+  let left = Int32.min lo.longitude hi.longitude in
+  let right = Int32.max lo.longitude hi.longitude in
+  let top = Int32.max lo.latitude hi.latitude in
+  let bottom = Int32.min lo.latitude hi.latitude in
 
   point.longitude >= left && point.longitude <= right
   && point.latitude >= bottom && point.latitude <= top
@@ -48,14 +51,14 @@ let radians_of_degrees = ( *. ) (pi /. 180.)
 
 (* Calculates the distance between two points using the "haversine" formula. *)
 (* This code was taken from http://www.movable-type.co.uk/scripts/latlong.html. *)
-let calc_distance (p1 : Point.t) (p2 : Point.t) : int =
+let calc_distance (p1 : Route_guide.point) (p2 : Route_guide.point) : int =
   let cord_factor = 1e7 in
   let r = 6_371_000.0 in
   (* meters *)
-  let lat1 = Float.of_int p1.latitude /. cord_factor in
-  let lat2 = Float.of_int p2.latitude /. cord_factor in
-  let lng1 = Float.of_int p1.longitude /. cord_factor in
-  let lng2 = Float.of_int p2.longitude /. cord_factor in
+  let lat1 = Float.of_int (Int32.to_int p1.latitude) /. cord_factor in
+  let lat2 = Float.of_int (Int32.to_int p2.latitude) /. cord_factor in
+  let lng1 = Float.of_int (Int32.to_int p1.longitude) /. cord_factor in
+  let lng2 = Float.of_int (Int32.to_int p2.longitude) /. cord_factor in
 
   let lat_rad1 = radians_of_degrees lat1 in
   let lat_rad2 = radians_of_degrees lat2 in
@@ -74,56 +77,51 @@ let calc_distance (p1 : Point.t) (p2 : Point.t) : int =
 
 (* $MDX part-begin=server-get-feature *)
 let get_feature (buffer : string) =
-  let decode, encode = Service.make_service_functions RouteGuide.getFeature in
   (* Decode the request. *)
-  let point =
-    Reader.create buffer |> decode |> function
-    | Ok v -> v
-    | Error e ->
-        failwith
-          (Printf.sprintf "Could not decode request: %s" (Result.show_error e))
-  in
-  Eio.traceln "GetFeature = {:%s}" (Point.show point);
+  let point = Pbrt.Decoder.of_string buffer |> Route_guide.decode_pb_point in
+  Eio.traceln "GetFeature = {:%a}" Route_guide.pp_point point;
 
   (* Lookup the feature and if found return it. *)
   let feature =
     List.find_opt
-      (fun (f : Feature.t) ->
+      (fun (f : Route_guide.feature) ->
         match (f.location, point) with
-        | Some p1, p2 -> Point.equal p1 p2
+        | Some p1, p2 -> compare_point p1 p2
         | _, _ -> false)
       !features
   in
-  Eio.traceln "Found feature %s"
-    (feature |> Option.map Feature.show |> Option.value ~default:"Missing");
+  Eio.traceln "Found feature %a" (Format.pp_print_option Route_guide.pp_feature) feature;
   match feature with
   | Some feature ->
-      (Grpc.Status.(v OK), Some (feature |> encode |> Writer.contents))
+     (Grpc.Status.(v OK), Some (let encoder = Pbrt.Encoder.create () in
+                                Route_guide.encode_pb_feature feature encoder;
+                                Pbrt.Encoder.to_string encoder))
   | None ->
       (* No feature was found, return an unnamed feature. *)
       ( Grpc.Status.(v OK),
-        Some (Feature.make ~location:point () |> encode |> Writer.contents) )
+        Some (
+            let feature = Route_guide.default_feature ~location:(Some point) () in
+            let encoder = Pbrt.Encoder.create () in
+            Route_guide.encode_pb_feature feature encoder;
+            Pbrt.Encoder.to_string encoder))
 
 (* $MDX part-end *)
 (* $MDX part-begin=server-list-features *)
 let list_features (buffer : string) (f : string -> unit) =
   (* Decode request. *)
-  let decode, encode = Service.make_service_functions RouteGuide.listFeatures in
   let rectangle =
-    Reader.create buffer |> decode |> function
-    | Ok v -> v
-    | Error e ->
-        failwith
-          (Printf.sprintf "Could not decode request: %s" (Result.show_error e))
+    Pbrt.Decoder.of_string buffer |> Route_guide.decode_pb_rectangle
   in
 
   (* Lookup and reply with features found. *)
   let () =
     List.iter
-      (fun (feature : Feature.t) ->
+      (fun (feature : Route_guide.feature) ->
         if in_range (Option.get feature.location) rectangle then
-          encode feature |> Writer.contents |> f
-        else ())
+          (let encoder = Pbrt.Encoder.create () in
+           Route_guide.encode_pb_feature feature encoder;
+           Pbrt.Encoder.to_string encoder |> f)
+         else ())
       !features
   in
   Grpc.Status.(v OK)
@@ -135,20 +133,14 @@ let record_route (clock : _ Eio.Time.clock) (stream : string Seq.t) =
 
   let last_point = ref None in
   let start = Eio.Time.now clock in
-  let decode, encode = Service.make_service_functions RouteGuide.recordRoute in
 
   let point_count, feature_count, distance =
     Seq.fold_left
       (fun (point_count, feature_count, distance) i ->
         let point =
-          Reader.create i |> decode |> function
-          | Ok v -> v
-          | Error e ->
-              failwith
-                (Printf.sprintf "Could not decode request: %s"
-                   (Result.show_error e))
+          Pbrt.Decoder.of_string i |> Route_guide.decode_pb_point
         in
-        Eio.traceln "  ==> Point = {%s}" (Point.show point);
+        Eio.traceln "  ==> Point = {%a}" Route_guide.pp_point point;
 
         (* Increment the point count *)
         let point_count = point_count + 1 in
@@ -156,8 +148,8 @@ let record_route (clock : _ Eio.Time.clock) (stream : string Seq.t) =
         (* Find features *)
         let feature_count =
           List.find_all
-            (fun (feature : Feature.t) ->
-              Point.equal (Option.get feature.location) point)
+            (fun (feature : Route_guide.feature) ->
+              compare_point (Option.get feature.location) point)
             !features
           |> fun x -> List.length x + feature_count
         in
@@ -175,29 +167,30 @@ let record_route (clock : _ Eio.Time.clock) (stream : string Seq.t) =
   let stop = Eio.Time.now clock in
   let elapsed_time = int_of_float (stop -. start) in
   let summary =
-    RouteSummary.make ~point_count ~feature_count ~distance ~elapsed_time ()
+    Route_guide.default_route_summary ~point_count:(Int32.of_int point_count)
+      ~feature_count:(Int32.of_int feature_count) ~distance:(Int32.of_int distance)
+      ~elapsed_time:(Int32.of_int elapsed_time) ()
   in
   Eio.traceln "RecordRoute exit\n";
-  (Grpc.Status.(v OK), Some (encode summary |> Writer.contents))
+  (Grpc.Status.(v OK), Some (
+                           Pbrt.Encoder.create ()
+                           |> fun encoder -> Route_guide.encode_pb_route_summary summary encoder
+                           |> fun () -> Pbrt.Encoder.to_string encoder))
 
 (* $MDX part-end *)
 (* $MDX part-begin=server-route-chat *)
 let route_chat (stream : string Seq.t) (f : string -> unit) =
   Printf.printf "RouteChat\n";
 
-  let decode, encode = Service.make_service_functions RouteGuide.routeChat in
   Seq.iter
     (fun i ->
       let note =
-        Reader.create i |> decode |> function
-        | Ok v -> v
-        | Error e ->
-            failwith
-              (Printf.sprintf "Could not decode request: %s"
-                 (Result.show_error e))
+        Pbrt.Decoder.of_string i |> Route_guide.decode_pb_route_note
       in
-      Printf.printf "  ==> Note = {%s}\n" (RouteNote.show note);
-      encode note |> Writer.contents |> f)
+      Format.(fprintf std_formatter "  ==> Note = {%a}\n" Route_guide.pp_route_note note);
+      let encoder = Pbrt.Encoder.create () in
+      Route_guide.encode_pb_route_note note encoder;
+      Pbrt.Encoder.to_string encoder |> f)
     stream;
 
   Printf.printf "RouteChat exit\n";

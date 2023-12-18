@@ -1,6 +1,5 @@
 open Grpc_eio
-open Routeguide.Route_guide.Routeguide
-open Ocaml_protoc_plugin
+open Routeguide
 
 (* $MDX part-begin=client-h2 *)
 let client ~sw host port network =
@@ -20,56 +19,53 @@ let client ~sw host port network =
 (* $MDX part-end *)
 (* $MDX part-begin=client-get-feature *)
 let call_get_feature connection point =
-  let encode, decode = Service.make_client_functions RouteGuide.getFeature in
   let response =
     Client.call ~service:"routeguide.RouteGuide" ~rpc:"GetFeature"
       ~do_request:(H2_eio.Client.request connection ~error_handler:ignore)
       ~handler:
         (Client.Rpc.unary
-           (encode point |> Writer.contents)
-           ~f:(fun response ->
-             match response with
+           (let encoder = Pbrt.Encoder.create () in
+            Route_guide.encode_pb_point point encoder;
+            Pbrt.Encoder.to_string encoder
+           )
+           ~f:(function
              | Some response -> (
-                 Reader.create response |> decode |> function
-                 | Ok feature -> feature
-                 | Error e ->
-                     failwith
-                       (Printf.sprintf "Could not decode request: %s"
-                          (Result.show_error e)))
-             | None -> Feature.make ()))
+               let decoder = Pbrt.Decoder.of_string response in
+               Route_guide.decode_pb_feature decoder)
+             | None -> Route_guide.default_feature ()))
       ()
   in
   match response with
-  | Ok (res, _ok) -> Printf.printf "RESPONSE = {%s}" (Feature.show res)
-  | Error _ -> Printf.printf "an error occurred"
+  | Ok (res, _ok) -> Format.(fprintf std_formatter "RESPONSE = {%a}" Route_guide.pp_feature res)
+  | Error _ -> Format.(fprintf std_formatter "an error occurred")
 
 (* $MDX part-end *)
 (* $MDX part-begin=client-list-features *)
 let print_features connection =
   let rectangle =
-    Rectangle.make
-      ~lo:(Point.make ~latitude:400000000 ~longitude:(-750000000) ())
-      ~hi:(Point.make ~latitude:420000000 ~longitude:(-730000000) ())
+    let lo = Route_guide.default_point ~latitude:Int32.(of_int 400000000) ~longitude:(Int32.(of_int (-750000000))) () in
+    let hi = Route_guide.default_point ~latitude:Int32.(of_int 420000000) ~longitude:Int32.(of_int (-730000000)) () in
+    Route_guide.default_rectangle
+      ~lo:(Some lo)
+      ~hi:(Some hi)
       ()
   in
 
-  let encode, decode = Service.make_client_functions RouteGuide.listFeatures in
   let stream =
     Client.call ~service:"routeguide.RouteGuide" ~rpc:"ListFeatures"
       ~do_request:(H2_eio.Client.request connection ~error_handler:ignore)
       ~handler:
         (Client.Rpc.server_streaming
-           (encode rectangle |> Writer.contents)
+           (
+             let encoder = Pbrt.Encoder.create () in
+             Route_guide.encode_pb_rectangle rectangle encoder;
+             Pbrt.Encoder.to_string encoder)
            ~f:(fun responses ->
              let stream =
                Seq.map
                  (fun str ->
-                   Reader.create str |> decode |> function
-                   | Ok feature -> feature
-                   | Error e ->
-                       failwith
-                         (Printf.sprintf "Could not decode request: %s"
-                            (Result.show_error e)))
+                   Pbrt.Decoder.of_string str
+                   |> Route_guide.decode_pb_feature)
                  responses
              in
              stream))
@@ -78,17 +74,17 @@ let print_features connection =
   match stream with
   | Ok (results, _ok) ->
       Seq.iter
-        (fun f -> Printf.printf "RESPONSE = {%s}" (Feature.show f))
+        (fun f -> Format.(fprintf std_formatter "RESPONSE = {%a}" Route_guide.pp_feature f))
         results
   | Error e ->
-      failwith (Printf.sprintf "HTTP2 error: %s" (H2.Status.to_string e))
+      failwith (Format.sprintf "HTTP2 error: %s" (H2.Status.to_string e))
 
 (* $MDX part-end *)
 (* $MDX part-begin=client-random-point *)
-let random_point () : Point.t =
-  let latitude = (Random.int 180 - 90) * 10000000 in
-  let longitude = (Random.int 360 - 180) * 10000000 in
-  Point.make ~latitude ~longitude ()
+let random_point () : Route_guide.point =
+  let latitude = (Random.int 180 - 90) * 10000000 |> Int32.of_int in
+  let longitude = (Random.int 360 - 180) * 10000000 |> Int32.of_int in
+  Route_guide.default_point ~latitude ~longitude ()
 
 (* $MDX part-end *)
 (* $MDX part-begin=client-record-route *)
@@ -98,7 +94,6 @@ let run_record_route connection =
     |> Seq.unfold (function 0 -> None | x -> Some (random_point (), x - 1))
   in
 
-  let encode, decode = Service.make_client_functions RouteGuide.recordRoute in
   let response =
     Client.call ~service:"routeguide.RouteGuide" ~rpc:"RecordRoute"
       ~do_request:(H2_eio.Client.request connection ~error_handler:ignore)
@@ -107,7 +102,9 @@ let run_record_route connection =
              (* Stream points to server. *)
              Seq.iter
                (fun point ->
-                 encode point |> Writer.contents |> fun x -> Seq.write f x)
+                 let encoder = Pbrt.Encoder.create () in
+                 Route_guide.encode_pb_point point encoder;
+                 Pbrt.Encoder.to_string encoder |> fun x -> Seq.write f x)
                points;
 
              (* Signal we have finished sending points. *)
@@ -116,18 +113,14 @@ let run_record_route connection =
              (* Decode RouteSummary responses. *)
              Eio.Promise.await response |> function
              | Some str -> (
-                 Reader.create str |> decode |> function
-                 | Ok feature -> feature
-                 | Error err ->
-                     failwith
-                       (Printf.sprintf "Could not decode request: %s"
-                          (Result.show_error err)))
+               let decoder = Pbrt.Decoder.of_string str in
+               Route_guide.decode_pb_route_summary decoder)
              | None -> failwith (Printf.sprintf "No RouteSummary received.")))
       ()
   in
   match response with
   | Ok (result, _ok) ->
-      Printf.printf "SUMMARY = {%s}" (RouteSummary.show result)
+      Format.(fprintf std_formatter "SUMMARY = {%a}" Route_guide.pp_route_summary result)
   | Error e ->
       failwith (Printf.sprintf "HTTP2 error: %s" (H2.Status.to_string e))
 
@@ -143,21 +136,22 @@ let run_route_chat clock connection =
          | 0 -> None
          | x ->
              Some
-               ( RouteNote.make ~location:(random_point ())
+               ( Route_guide.default_route_note ~location:(Some (random_point ()))
                    ~message:(Printf.sprintf "Random Message %i" x)
                    (),
                  x - 1 ))
   in
   (* $MDX part-end *)
   (* $MDX part-begin=client-route-chat-2 *)
-  let encode, decode = Service.make_client_functions RouteGuide.routeChat in
   let rec go writer reader notes =
     match Seq.uncons notes with
     | None ->
         Seq.close_writer writer (* Signal no more notes from the client. *)
     | Some (route_note, xs) -> (
-        encode route_note |> Writer.contents |> fun x ->
-        Seq.write writer x;
+      let encoder = Pbrt.Encoder.create () in
+      Route_guide.encode_pb_route_note route_note encoder;
+      Pbrt.Encoder.to_string encoder |> fun x ->
+                                        Seq.write writer x;
 
         (* Yield and sleep, waiting for server reply. *)
         Eio.Time.sleep clock 1.0;
@@ -167,14 +161,10 @@ let run_route_chat clock connection =
         | None -> failwith "Expecting response"
         | Some (response, reader') ->
             let route_note =
-              Reader.create response |> decode |> function
-              | Ok route_note -> route_note
-              | Error e ->
-                  failwith
-                    (Printf.sprintf "Could not decode request: %s"
-                       (Result.show_error e))
+              Pbrt.Decoder.of_string response
+              |> Route_guide.decode_pb_route_note
             in
-            Printf.printf "NOTE = {%s}\n" (RouteNote.show route_note);
+            Format.(fprintf std_formatter "NOTE = {%a}\n" Route_guide.pp_route_note route_note);
             go writer reader' xs)
   in
   let result =
@@ -205,8 +195,7 @@ let main env =
 
     Printf.printf "*** SIMPLE RPC ***\n";
     let request =
-      RouteGuide.GetFeature.Request.make ~latitude:409146138
-        ~longitude:(-746188906) ()
+      Route_guide.default_point ~latitude:(Int32.of_int 409146138) ~longitude:(Int32.of_int (-746188906)) ()
     in
     let result = call_get_feature connection request in
 
